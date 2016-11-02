@@ -35,6 +35,42 @@
 #define FORMAT_KEY_VALUE 1
 #define FORMAT_XML 2
 
+#include <openssl/x509v3.h>
+#include <openssl/objects.h>
+#include <openssl/pem.h>
+#include <openssl/evp.h>
+
+void load_private_key(char *filename, char *data, size_t len) {
+   EVP_MD_CTX* ctx = NULL;
+   EVP_PKEY *privkey;
+   FILE *fp;
+   RSA *rsakey;
+   const EVP_MD* md = EVP_get_digestbyname("SHA256");
+
+   OpenSSL_add_all_algorithms();
+   privkey = EVP_PKEY_new();
+
+   fp = fopen (filename, "r");
+
+   if (!PEM_read_PrivateKey( fp, &privkey, NULL, NULL)) {
+      printf("%s Failed to load %s\n", __FUNCTION__, filename);
+      return;
+   }
+
+   fclose(fp);
+
+   ctx = EVP_MD_CTX_create();
+   EVP_DigestSignInit(ctx, NULL, md, NULL, privkey);
+   EVP_DigestSignUpdate(ctx, data, len);
+   size_t req = 0;
+   EVP_DigestSignFinal(ctx, NULL, &req);
+
+    if(ctx) {
+        EVP_MD_CTX_destroy(ctx);
+        ctx = NULL;
+    }
+}
+
 static const char *domains[] = {
 	//"com.apple.disk_usage",
 	//"com.apple.disk_usage.factory",
@@ -285,7 +321,7 @@ int main(int argc, char *argv[])
 			node = NULL;
 		}
 	}
-
+/*
 	for(int i=0; i<sizeof(domains)>>2; i++) {
 		if (domains[i] == NULL) break;
 		if(lockdownd_get_value(client, domains[i], key, &node) == LOCKDOWN_E_SUCCESS && node) {
@@ -298,7 +334,7 @@ int main(int argc, char *argv[])
 			node = NULL;
 		}
 	}
-
+*/
 	if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node) == LOCKDOWN_E_SUCCESS && node) {
 		// important fields: FairPlayCertificate, FairPlayGUID, FairPlayID, MinITunesVersion
 		char *tmp_value=NULL;
@@ -322,11 +358,36 @@ int main(int argc, char *argv[])
 		plist_t item = plist_dict_get_item(node, "ActivationInfoXML");
 		if (!item) printf("Failed to get ActivationInfoXML\n");
 
+                subitem = plist_dict_get_item(node, "FairPlayCertChain");
+                if (!subitem) printf("Failed to get FairPlayCertChain\n");
+		plist_get_data_val(subitem, &xml_doc, &len);
+		write_xml_file("FairPlayCertChain.crt", xml_doc, (uint32_t)len);
+
 		plist_get_data_val(item, &xml_doc, &len);
 		item = NULL;
 
 		// load ActivationInfoXML as plist
 		plist_from_xml(xml_doc, len, &item);
+
+		subitem = plist_dict_get_item(item, "FMiPAccountExists");
+		if (!subitem) printf("Failed to get FMiPAccountExists\n");
+
+		if (plist_get_node_type(subitem) == PLIST_BOOLEAN) {
+			plist_set_bool_val(subitem, 255);
+		} else {
+			printf("FMiPAccountExists not boolean!\n");
+		}
+
+		subitem = plist_dict_get_item(item, "ActivationState");
+		if (!subitem) printf("Failed to get ActivationState\n");
+
+		if (plist_get_node_type(subitem) == PLIST_STRING) {
+			plist_set_string_val(subitem, "Activated");
+		} else {
+			printf("ActivationState not string!\n");
+		}
+
+		plist_to_xml(item, &xml_doc, (uint32_t*)&len);
 		write_xml_file("ActivationInfoXML.xml", xml_doc, (uint32_t)len);
 
 		// get DeviceCertRequest
@@ -334,6 +395,9 @@ int main(int argc, char *argv[])
                 if (!subitem) printf("Failed to get DeviceCertRequest\n");
 		plist_get_data_val(subitem, &xml_doc, &len);
 		write_xml_file("DeviceCertRequest.cer", xml_doc, (uint32_t)len);
+
+		//load_private_key("certs/signature_private.key");
+
 		plist_free(node);
 	}
 	if (domain != NULL)
