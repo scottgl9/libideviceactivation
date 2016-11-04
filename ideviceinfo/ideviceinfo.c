@@ -40,6 +40,98 @@
 #include <openssl/pem.h>
 #include <openssl/evp.h>
 
+#define CERTIFICATE_URL "https://albert.apple.com/deviceservices/certifyMe"
+#define PHONEHOME_URL "https://albert.apple.com/deviceservices/phoneHome"
+#define ACTIVITY_URL "https://albert.apple.com/deviceservices/activity"
+
+const char *response_strings[] = {
+"InternationalMobileEquipmentIdentity",
+"CertificateURL",
+"PhoneNumberNotificationURL",
+"SerialNumber",
+"InternationalMobileSubscriberIdentity",
+"MobileEquipmentIdentifier",
+"ProductType",
+"UniqueDeviceID",
+"ActivationRandomness",
+"ActivityURL",
+"IntegratedCircuitCardIdentity",
+NULL
+};
+
+void write_xml_file(char *filename, char *xml, uint32_t len) {
+        FILE *f = fopen(filename, "wb");
+        fwrite(xml, 1, len, f);
+        fclose(f);
+}
+
+void createActivationRequest(plist_t node) {
+	plist_t request, subitem, newitem;
+	char *xml_doc=NULL;
+	uint32_t len=0;
+
+	request = plist_new_dict();
+ 
+	subitem = plist_dict_get_item(node, "ActivationInfoXML");
+	if (!subitem) printf("Failed to get ActivationInfoXML\n");
+	plist_dict_insert_item(request, "ActivationInfoXML", plist_copy(subitem));
+
+	subitem = plist_dict_get_item(node, "FairPlayCertChain");
+	if (!subitem) printf("Failed to get FairPlayCertChain\n");
+	//plist_get_data_val(subitem, &xml_doc, &len);
+	plist_dict_set_item(request, "FairPlayCertChain", plist_copy(subitem));
+
+	subitem = plist_dict_get_item(node, "FairPlaySignature");
+	if (!subitem) printf("Failed to get FairPlaySignature\n");
+	plist_dict_insert_item(request, "FairPlaySignature", plist_copy(subitem));
+
+	plist_to_xml(request, &xml_doc, (uint32_t*)&len);
+	write_xml_file("data/activation-info.xml", xml_doc, (uint32_t)len);
+
+}
+
+char *buildAccountToken(plist_t item, char *filename, size_t *size) {
+	char *data=NULL;
+	char *str=NULL;
+	int i;
+	FILE *f = fopen(filename, "wb");
+
+	fprintf(f, "{\n");
+	for (i=0; i<sizeof(response_strings)>>2; i++) {
+		if (response_strings[i] == NULL) break;
+		else if (!strcmp(response_strings[i], "CertificateURL"))
+		{
+			fprintf(f, "\t\"%s\" = \"%s\"\n", response_strings[i], CERTIFICATE_URL);
+			continue;
+		} else if (!strcmp(response_strings[i], "PhoneNumberNotificationURL"))
+		{
+			fprintf(f, "\t\"%s\" = \"%s\"\n", response_strings[i], PHONEHOME_URL);
+			continue;
+		} else if (!strcmp(response_strings[i], "ActivityURL"))
+		{
+			fprintf(f, "\t\"%s\" = \"%s\"\n", response_strings[i], ACTIVITY_URL);
+			continue;
+		}
+
+		plist_t subitem = plist_dict_get_item(item, response_strings[i]);
+                if (!subitem) printf("Failed to get %s\n", response_strings[i]);
+		plist_get_string_val(subitem, &str);
+		if (str) fprintf(f, "\t\"%s\" = \"%s\"\n", response_strings[i], str);
+		str = NULL;
+	}
+	fprintf(f, "}\n");
+	fclose(f);
+
+	f = fopen(filename, "rb");
+	fseek(f, 0L, SEEK_END);
+	*size = ftell(f);
+	fseek(f, 0L, SEEK_SET);
+	data = malloc(*size);
+	fread(data, 1, *size, f);
+	fclose(f);
+	return data;
+}
+
 void load_private_key(char *filename, char *data, size_t len) {
    EVP_MD_CTX* ctx = NULL;
    EVP_PKEY *privkey;
@@ -62,13 +154,44 @@ void load_private_key(char *filename, char *data, size_t len) {
    ctx = EVP_MD_CTX_create();
    EVP_DigestSignInit(ctx, NULL, md, NULL, privkey);
    EVP_DigestSignUpdate(ctx, data, len);
-   size_t req = 0;
-   EVP_DigestSignFinal(ctx, NULL, &req);
+   size_t signlen = 0;
+   EVP_DigestSignFinal(ctx, NULL, &signlen);
+   if (signlen != 128) {
+	   printf("Invalid signature length = %d\n", (int)signlen);
+   }
+   if(ctx) {
+       EVP_MD_CTX_destroy(ctx);
+       ctx = NULL;
+   }
+}
 
-    if(ctx) {
-        EVP_MD_CTX_destroy(ctx);
-        ctx = NULL;
-    }
+size_t plist_strip_xml(char** xmlplist)
+{
+        uint32_t size = 0;
+
+        if (!xmlplist && !*xmlplist)
+                return -1;
+
+        char* start = strstr(*xmlplist, "<plist version=\"1.0\">\n<data>\n");
+        if (start == NULL) {
+                return -1;
+        }
+
+        char* stop = strstr(*xmlplist, "\n</data>\n</plist>");
+        if (stop == NULL) {
+                return -1;
+        }
+
+        start += strlen("<plist version=\"1.0\">\n<data>\n");
+        size = stop - start;
+        char* stripped = malloc(size + 1);
+        memset(stripped, '\0', size + 1);
+        memcpy(stripped, start, size);
+        free(*xmlplist);
+        *xmlplist = stripped;
+        stripped = NULL;
+
+        return size;
 }
 
 static const char *domains[] = {
@@ -217,12 +340,6 @@ static void print_usage(int argc, char **argv)
 	//printf("Homepage: <" PACKAGE_URL ">\n");
 }
 
-void write_xml_file(char *filename, char *xml, uint32_t len) {
-	FILE *f = fopen(filename, "wb");
-	fwrite(xml, 1, len, f);
-	fclose(f);
-}
-
 int main(int argc, char *argv[])
 {
 	lockdownd_client_t client = NULL;
@@ -321,7 +438,6 @@ int main(int argc, char *argv[])
 			node = NULL;
 		}
 	}
-/*
 	for(int i=0; i<sizeof(domains)>>2; i++) {
 		if (domains[i] == NULL) break;
 		if(lockdownd_get_value(client, domains[i], key, &node) == LOCKDOWN_E_SUCCESS && node) {
@@ -334,17 +450,18 @@ int main(int argc, char *argv[])
 			node = NULL;
 		}
 	}
-*/
 	if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node) == LOCKDOWN_E_SUCCESS && node) {
 		// important fields: FairPlayCertificate, FairPlayGUID, FairPlayID, MinITunesVersion
 		char *tmp_value=NULL;
+		// NOTE: FairPlayCertificate retrieved here is what is sent to the device (base64 encoded) as FairPlayKeyData
 		plist_t item = plist_dict_get_item(node, "FairPlayCertificate");
 		if (!item) printf("Failed to get FairPlayCertificate\n");
 		plist_to_xml(item, &xml_doc, &xml_length);
-		write_xml_file("FairPlayCertificate.crt", xml_doc, xml_length);
+		xml_length = plist_strip_xml(&xml_doc);
+		write_xml_file("data/FairPlayKeyData.pem", xml_doc, xml_length);
 		//plist_free(item);
 		item = plist_dict_get_item(node, "FairPlayGUID");
-		//plist_get_string_val(item, &tmp_value);	
+		//plist_get_string_val(item, &tmp_value);
 		//printf("FairPlayGUID = %s\n", tmp_value);
 		plist_free(node);
 		node = NULL;
@@ -355,13 +472,21 @@ int main(int argc, char *argv[])
 	} else {
 		char *tmp_value=NULL;
 		plist_t subitem;
+
 		plist_t item = plist_dict_get_item(node, "ActivationInfoXML");
 		if (!item) printf("Failed to get ActivationInfoXML\n");
+
+		createActivationRequest(node);
 
                 subitem = plist_dict_get_item(node, "FairPlayCertChain");
                 if (!subitem) printf("Failed to get FairPlayCertChain\n");
 		plist_get_data_val(subitem, &xml_doc, &len);
-		write_xml_file("FairPlayCertChain.crt", xml_doc, (uint32_t)len);
+		write_xml_file("data/FairPlayCertChain.crt", xml_doc, (uint32_t)len);
+
+		subitem = plist_dict_get_item(node, "FairPlaySignature");
+		if (!subitem) printf("Failed to get FairPlaySignature\n");
+		plist_get_data_val(subitem, &xml_doc, &len);
+		write_xml_file("data/FairPlaySignature", xml_doc, (uint32_t)len);
 
 		plist_get_data_val(item, &xml_doc, &len);
 		item = NULL;
@@ -388,15 +513,18 @@ int main(int argc, char *argv[])
 		}
 
 		plist_to_xml(item, &xml_doc, (uint32_t*)&len);
-		write_xml_file("ActivationInfoXML.xml", xml_doc, (uint32_t)len);
+		write_xml_file("data/ActivationInfoXML.xml", xml_doc, (uint32_t)len);
 
 		// get DeviceCertRequest
 		subitem = plist_dict_get_item(item, "DeviceCertRequest");
                 if (!subitem) printf("Failed to get DeviceCertRequest\n");
 		plist_get_data_val(subitem, &xml_doc, &len);
-		write_xml_file("DeviceCertRequest.cer", xml_doc, (uint32_t)len);
+		write_xml_file("data/DeviceCertRequest.cer", xml_doc, (uint32_t)len);
 
-		//load_private_key("certs/signature_private.key");
+		size_t atsize;
+		char *atdata = buildAccountToken(item, "data/accounttoken.txt", &atsize);
+		load_private_key("certs/signature_private.key", atdata, atsize);
+		free(atdata);
 
 		plist_free(node);
 	}

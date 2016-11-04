@@ -24,3 +24,5 @@ src/.libs
 tools/.libs
 tools/ideviceactivation
 stamp-h1
+ideviceinfo/ideviceinfo
+ideviceinfo/data
