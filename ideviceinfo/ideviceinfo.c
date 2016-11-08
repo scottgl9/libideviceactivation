@@ -65,6 +65,129 @@ void write_xml_file(char *filename, char *xml, uint32_t len) {
         fclose(f);
 }
 
+/* aaaack but it's fast and const should make it shared text page. */
+static const unsigned char pr2six[256] =
+{
+    /* ASCII table */
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
+    64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
+    64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
+};
+
+
+int Base64decode_len(const char *bufcoded)
+{
+    int nbytesdecoded;
+    register const unsigned char *bufin;
+    register int nprbytes;
+
+    bufin = (const unsigned char *) bufcoded;
+    while (pr2six[*(bufin++)] <= 63);
+
+    nprbytes = (bufin - (const unsigned char *) bufcoded) - 1;
+    nbytesdecoded = ((nprbytes + 3) / 4) * 3;
+
+    return nbytesdecoded + 1;
+}
+
+static const char basis_64[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+int Base64encode_len(int len)
+{
+    return ((len + 2) / 3 * 4) + 1;
+}
+
+int Base64encode(char *encoded, const char *string, int len)
+{
+    int i;
+    char *p;
+
+    p = encoded;
+    for (i = 0; i < len - 2; i += 3) {
+    *p++ = basis_64[(string[i] >> 2) & 0x3F];
+    *p++ = basis_64[((string[i] & 0x3) << 4) |
+                    ((int) (string[i + 1] & 0xF0) >> 4)];
+    *p++ = basis_64[((string[i + 1] & 0xF) << 2) |
+                    ((int) (string[i + 2] & 0xC0) >> 6)];
+    *p++ = basis_64[string[i + 2] & 0x3F];
+    }
+    if (i < len) {
+    *p++ = basis_64[(string[i] >> 2) & 0x3F];
+    if (i == (len - 1)) {
+        *p++ = basis_64[((string[i] & 0x3) << 4)];
+        *p++ = '=';
+    }
+    else {
+        *p++ = basis_64[((string[i] & 0x3) << 4) |
+                        ((int) (string[i + 1] & 0xF0) >> 4)];
+        *p++ = basis_64[((string[i + 1] & 0xF) << 2)];
+    }
+    *p++ = '=';
+    }
+
+    *p++ = '\0';
+    return p - encoded;
+}
+
+int Base64decode(char *bufplain, const char *bufcoded)
+{
+    int nbytesdecoded;
+    register const unsigned char *bufin;
+    register unsigned char *bufout;
+    register int nprbytes;
+
+    bufin = (const unsigned char *) bufcoded;
+    while (pr2six[*(bufin++)] <= 63);
+    nprbytes = (bufin - (const unsigned char *) bufcoded) - 1;
+    nbytesdecoded = ((nprbytes + 3) / 4) * 3;
+
+    bufout = (unsigned char *) bufplain;
+    bufin = (const unsigned char *) bufcoded;
+
+    while (nprbytes > 4) {
+    *(bufout++) =
+        (unsigned char) (pr2six[*bufin] << 2 | pr2six[bufin[1]] >> 4);
+    *(bufout++) =
+        (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
+    *(bufout++) =
+        (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
+    bufin += 4;
+    nprbytes -= 4;
+    }
+
+    /* Note: (nprbytes == 1) would be an error, so just ingore that case */
+    if (nprbytes > 1) {
+    *(bufout++) =
+        (unsigned char) (pr2six[*bufin] << 2 | pr2six[bufin[1]] >> 4);
+    }
+    if (nprbytes > 2) {
+    *(bufout++) =
+        (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
+    }
+    if (nprbytes > 3) {
+    *(bufout++) =
+        (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
+    }
+
+    *(bufout++) = '\0';
+    nbytesdecoded -= (4 - nprbytes) & 3;
+    return nbytesdecoded;
+}
+
 void createActivationRequest(plist_t node) {
 	plist_t request, subitem, newitem;
 	char *xml_doc=NULL;
@@ -132,11 +255,14 @@ char *buildAccountToken(plist_t item, char *filename, size_t *size) {
 	return data;
 }
 
-void load_private_key(char *filename, char *data, size_t len) {
+// return 128 byte signature generated from signing account token
+char *load_private_key(char *filename, char *data, size_t len) {
    EVP_MD_CTX* ctx = NULL;
    EVP_PKEY *privkey;
    FILE *fp;
    RSA *rsakey;
+   char *signature = NULL;
+   char *encodedsig = NULL;
    const EVP_MD* md = EVP_get_digestbyname("SHA256");
 
    OpenSSL_add_all_algorithms();
@@ -158,11 +284,25 @@ void load_private_key(char *filename, char *data, size_t len) {
    EVP_DigestSignFinal(ctx, NULL, &signlen);
    if (signlen != 128) {
 	   printf("Invalid signature length = %d\n", (int)signlen);
+           return NULL;
    }
+   signature = malloc(128);
+   EVP_DigestSignFinal(ctx, signature, &signlen);
+
+   encodedsig = malloc(Base64encode_len(signlen));
+   Base64encode(encodedsig, signature, 128);
+
    if(ctx) {
        EVP_MD_CTX_destroy(ctx);
        ctx = NULL;
    }
+
+   if (signature) {
+       free(signature);
+       signature = NULL;
+   }
+
+   return encodedsig;
 }
 
 size_t plist_strip_xml(char** xmlplist)
@@ -223,88 +363,6 @@ static const char *domains[] = {
 	NULL
 };
 
-/* aaaack but it's fast and const should make it shared text page. */
-static const unsigned char pr2six[256] =
-{
-    /* ASCII table */
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
-    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
-    64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
-    64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
-};
-
-int Base64decode_len(const char *bufcoded)
-{
-    int nbytesdecoded;
-    register const unsigned char *bufin;
-    register int nprbytes;
-
-    bufin = (const unsigned char *) bufcoded;
-    while (pr2six[*(bufin++)] <= 63);
-
-    nprbytes = (bufin - (const unsigned char *) bufcoded) - 1;
-    nbytesdecoded = ((nprbytes + 3) / 4) * 3;
-
-    return nbytesdecoded + 1;
-}
-
-int Base64decode(char *bufplain, const char *bufcoded)
-{
-    int nbytesdecoded;
-    register const unsigned char *bufin;
-    register unsigned char *bufout;
-    register int nprbytes;
-
-    bufin = (const unsigned char *) bufcoded;
-    while (pr2six[*(bufin++)] <= 63);
-    nprbytes = (bufin - (const unsigned char *) bufcoded) - 1;
-    nbytesdecoded = ((nprbytes + 3) / 4) * 3;
-
-    bufout = (unsigned char *) bufplain;
-    bufin = (const unsigned char *) bufcoded;
-
-    while (nprbytes > 4) {
-    *(bufout++) =
-        (unsigned char) (pr2six[*bufin] << 2 | pr2six[bufin[1]] >> 4);
-    *(bufout++) =
-        (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
-    *(bufout++) =
-        (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
-    bufin += 4;
-    nprbytes -= 4;
-    }
-
-    /* Note: (nprbytes == 1) would be an error, so just ingore that case */
-    if (nprbytes > 1) {
-    *(bufout++) =
-        (unsigned char) (pr2six[*bufin] << 2 | pr2six[bufin[1]] >> 4);
-    }
-    if (nprbytes > 2) {
-    *(bufout++) =
-        (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
-    }
-    if (nprbytes > 3) {
-    *(bufout++) =
-        (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
-    }
-
-    *(bufout++) = '\0';
-    nbytesdecoded -= (4 - nprbytes) & 3;
-    return nbytesdecoded;
-}
-
 static int is_domain_known(char *domain)
 {
 	int i = 0;
@@ -325,9 +383,9 @@ static void print_usage(int argc, char **argv)
 	printf("Usage: %s [OPTIONS]\n", (name ? name + 1: argv[0]));
 	printf("Show information about a connected device.\n\n");
 	printf("  -d, --debug\t\tenable communication debugging\n");
-	printf("  -s, --simple\t\tuse a simple connection to avoid auto-pairing with the device\n");
+	//printf("  -s, --simple\t\tuse a simple connection to avoid auto-pairing with the device\n");
 	printf("  -u, --udid UDID\ttarget specific device by its 40-digit device UDID\n");
-	printf("  -q, --domain NAME\tset domain of query to NAME. Default: None\n");
+	//printf("  -q, --domain NAME\tset domain of query to NAME. Default: None\n");
 	printf("  -k, --key NAME\tonly query key specified by NAME. Default: All keys.\n");
 	printf("  -x, --xml\t\toutput information as xml plist instead of key/value pairs\n");
 	printf("  -h, --help\t\tprints usage information\n");
@@ -348,6 +406,7 @@ int main(int argc, char *argv[])
 	idevice_error_t ret = IDEVICE_E_UNKNOWN_ERROR;
 	int i;
 	int simple = 0;
+	int activate = 0;
 	int format = FORMAT_XML; // xml format by default
 	const char* udid = NULL;
 	char *domain = NULL;
@@ -373,6 +432,7 @@ int main(int argc, char *argv[])
 			udid = argv[i];
 			continue;
 		}
+/*
 		else if (!strcmp(argv[i], "-q") || !strcmp(argv[i], "--domain")) {
 			i++;
 			if (!argv[i] || (strlen(argv[i]) < 4)) {
@@ -385,6 +445,13 @@ int main(int argc, char *argv[])
 			domain = strdup(argv[i]);
 			continue;
 		}
+*/
+		else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--activate")) {
+			// hacktivate this
+			activate = 1;
+			continue;
+		}
+
 		else if (!strcmp(argv[i], "-k") || !strcmp(argv[i], "--key")) {
 			i++;
 			if (!argv[i] || (strlen(argv[i]) <= 1)) {
@@ -394,10 +461,12 @@ int main(int argc, char *argv[])
 			key = strdup(argv[i]);
 			continue;
 		}
+/*
 		else if (!strcmp(argv[i], "-s") || !strcmp(argv[i], "--simple")) {
 			simple = 1;
 			continue;
 		}
+*/
 		else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			print_usage(argc, argv);
 			return 0;
@@ -498,7 +567,7 @@ int main(int argc, char *argv[])
 		if (!subitem) printf("Failed to get FMiPAccountExists\n");
 
 		if (plist_get_node_type(subitem) == PLIST_BOOLEAN) {
-			plist_set_bool_val(subitem, 255);
+			plist_set_bool_val(subitem, 1);
 		} else {
 			printf("FMiPAccountExists not boolean!\n");
 		}
@@ -527,6 +596,11 @@ int main(int argc, char *argv[])
 		free(atdata);
 
 		plist_free(node);
+
+		// use data pulled from device to build activation response
+		if (activate) {
+			
+		}
 	}
 	if (domain != NULL)
 		free(domain);
