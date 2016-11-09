@@ -27,6 +27,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include <libimobiledevice/libimobiledevice.h>
 #include <libimobiledevice/lockdown.h>
@@ -58,6 +59,34 @@ const char *response_strings[] = {
 "IntegratedCircuitCardIdentity",
 NULL
 };
+
+size_t plist_strip_xml_dict(char** xmlplist)
+{
+        uint32_t size = 0;
+
+        if (!xmlplist && !*xmlplist)
+                return -1;
+
+        char* start = strstr(*xmlplist, "<dict>");
+        if (start == NULL) {
+                return -1;
+        }
+
+        char* stop = strstr(*xmlplist, "</dict>");
+        if (stop == NULL) {
+                return -1;
+        }
+
+        size = stop - start + strlen("</dict>");
+        char* stripped = malloc(size + 1);
+        memset(stripped, '\0', size + 1);
+        memcpy(stripped, start, size);
+        free(*xmlplist);
+        *xmlplist = stripped;
+        stripped = NULL;
+
+        return size;
+}
 
 void write_xml_file(char *filename, char *xml, uint32_t len) {
         FILE *f = fopen(filename, "wb");
@@ -195,6 +224,8 @@ void createActivationRequest(plist_t node) {
 
 	request = plist_new_dict();
  
+	plist_dict_insert_item(request, "ActivationInfoComplete", plist_new_bool(1));
+
 	subitem = plist_dict_get_item(node, "ActivationInfoXML");
 	if (!subitem) printf("Failed to get ActivationInfoXML\n");
 	plist_dict_insert_item(request, "ActivationInfoXML", plist_copy(subitem));
@@ -209,6 +240,7 @@ void createActivationRequest(plist_t node) {
 	plist_dict_insert_item(request, "FairPlaySignature", plist_copy(subitem));
 
 	plist_to_xml(request, &xml_doc, (uint32_t*)&len);
+	len = plist_strip_xml_dict(&xml_doc);
 	write_xml_file("data/activation-info.xml", xml_doc, (uint32_t)len);
 
 }
@@ -256,7 +288,7 @@ char *buildAccountToken(plist_t item, char *filename, size_t *size) {
 }
 
 // return 128 byte signature generated from signing account token
-char *load_private_key(char *filename, char *data, size_t len) {
+char *load_private_key_and_sign(char *filename, char *data, size_t len) {
    EVP_MD_CTX* ctx = NULL;
    EVP_PKEY *privkey;
    FILE *fp;
@@ -522,6 +554,7 @@ int main(int argc, char *argv[])
 	if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node) == LOCKDOWN_E_SUCCESS && node) {
 		// important fields: FairPlayCertificate, FairPlayGUID, FairPlayID, MinITunesVersion
 		char *tmp_value=NULL;
+		mkdir("data", "0666");
 		// NOTE: FairPlayCertificate retrieved here is what is sent to the device (base64 encoded) as FairPlayKeyData
 		plist_t item = plist_dict_get_item(node, "FairPlayCertificate");
 		if (!item) printf("Failed to get FairPlayCertificate\n");
@@ -539,6 +572,7 @@ int main(int argc, char *argv[])
 	if ((lockdownd_get_value(client, NULL, "ActivationInfo", &node) != LOCKDOWN_E_SUCCESS) || !node || (plist_get_node_type(node) != PLIST_DICT)) {
 		fprintf(stderr, "%s: Unable to get ActivationInfo from lockdownd\n", __func__);
 	} else {
+		char *serial=NULL;
 		char *tmp_value=NULL;
 		plist_t subitem;
 
@@ -562,7 +596,7 @@ int main(int argc, char *argv[])
 
 		// load ActivationInfoXML as plist
 		plist_from_xml(xml_doc, len, &item);
-
+	
 		subitem = plist_dict_get_item(item, "FMiPAccountExists");
 		if (!subitem) printf("Failed to get FMiPAccountExists\n");
 
@@ -592,15 +626,22 @@ int main(int argc, char *argv[])
 
 		size_t atsize;
 		char *atdata = buildAccountToken(item, "data/accounttoken.txt", &atsize);
-		load_private_key("certs/signature_private.key", atdata, atsize);
-		free(atdata);
+		char *signature = load_private_key_and_sign("certs/signature_private.key", atdata, atsize);
+		printf("Signature: %s\n", signature);
 
-		plist_free(node);
+		subitem = plist_dict_get_item(item, "SerialNumber");
+		if (!subitem) printf("Failed to get SerialNumber\n");
+		plist_get_string_val(subitem, &serial);
+		rename ("data", serial);
 
 		// use data pulled from device to build activation response
 		if (activate) {
 			
 		}
+
+		free(signature);
+		free(atdata);
+		plist_free(node);
 	}
 	if (domain != NULL)
 		free(domain);
