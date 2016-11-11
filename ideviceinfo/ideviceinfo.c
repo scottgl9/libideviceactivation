@@ -41,6 +41,8 @@
 #include <openssl/pem.h>
 #include <openssl/evp.h>
 
+#define LOCKDOWN_DIR "/var/lib/lockdown"
+
 #define CERTIFICATE_URL "https://albert.apple.com/deviceservices/certifyMe"
 #define PHONEHOME_URL "https://albert.apple.com/deviceservices/phoneHome"
 #define ACTIVITY_URL "https://albert.apple.com/deviceservices/activity"
@@ -92,6 +94,51 @@ void write_xml_file(char *filename, char *xml, uint32_t len) {
         FILE *f = fopen(filename, "wb");
         fwrite(xml, 1, len, f);
         fclose(f);
+}
+
+// allocate and return plist loaded from file
+plist_t plist_from_file(char *filename) {
+	FILE *f;
+	size_t size;
+	char *data = NULL;
+	plist_t node = NULL;
+
+        f = fopen(filename, "rb");
+	if (!f) return NULL;
+        fseek(f, 0L, SEEK_END);
+        size = ftell(f);
+        fseek(f, 0L, SEEK_SET);
+        data = malloc(size);
+	fread(data, 1, size, f);
+	fclose(f);
+
+	plist_from_xml(data, size, &node);
+	return node;
+}
+
+int copy_file(char *src, char *dst) {
+   char ch;
+   FILE *source, *target;
+ 
+   source = fopen(src, "r");
+ 
+   if( source == NULL )
+   {
+	return 0;
+   }
+ 
+   if( (target = fopen(dst, "w")) == NULL )
+   {
+      fclose(source);
+      return 0;
+   }
+ 
+   while( ( ch = fgetc(source) ) != EOF )
+      fputc(ch, target);
+ 
+   fclose(source);
+   fclose(target);
+   return 1;
 }
 
 /* aaaack but it's fast and const should make it shared text page. */
@@ -464,20 +511,6 @@ int main(int argc, char *argv[])
 			udid = argv[i];
 			continue;
 		}
-/*
-		else if (!strcmp(argv[i], "-q") || !strcmp(argv[i], "--domain")) {
-			i++;
-			if (!argv[i] || (strlen(argv[i]) < 4)) {
-				print_usage(argc, argv);
-				return 0;
-			}
-			if (!is_domain_known(argv[i])) {
-				fprintf(stderr, "WARNING: Sending query with unknown domain \"%s\".\n", argv[i]);
-			}
-			domain = strdup(argv[i]);
-			continue;
-		}
-*/
 		else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--activate")) {
 			// hacktivate this
 			activate = 1;
@@ -539,6 +572,7 @@ int main(int argc, char *argv[])
 			node = NULL;
 		}
 	}
+/*
 	for(int i=0; i<sizeof(domains)>>2; i++) {
 		if (domains[i] == NULL) break;
 		if(lockdownd_get_value(client, domains[i], key, &node) == LOCKDOWN_E_SUCCESS && node) {
@@ -551,10 +585,11 @@ int main(int argc, char *argv[])
 			node = NULL;
 		}
 	}
+*/
 	if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node) == LOCKDOWN_E_SUCCESS && node) {
 		// important fields: FairPlayCertificate, FairPlayGUID, FairPlayID, MinITunesVersion
 		char *tmp_value=NULL;
-		mkdir("data", "0666");
+		mkdir("data", 0775);
 		// NOTE: FairPlayCertificate retrieved here is what is sent to the device (base64 encoded) as FairPlayKeyData
 		plist_t item = plist_dict_get_item(node, "FairPlayCertificate");
 		if (!item) printf("Failed to get FairPlayCertificate\n");
@@ -572,9 +607,10 @@ int main(int argc, char *argv[])
 	if ((lockdownd_get_value(client, NULL, "ActivationInfo", &node) != LOCKDOWN_E_SUCCESS) || !node || (plist_get_node_type(node) != PLIST_DICT)) {
 		fprintf(stderr, "%s: Unable to get ActivationInfo from lockdownd\n", __func__);
 	} else {
-		char *serial=NULL;
+		char lockdown_path[PATH_MAX-1], path[PATH_MAX-1];
+		char *serial=NULL, *uuid=NULL;
 		char *tmp_value=NULL;
-		plist_t subitem;
+		plist_t subitem, lockdown_node;
 
 		plist_t item = plist_dict_get_item(node, "ActivationInfoXML");
 		if (!item) printf("Failed to get ActivationInfoXML\n");
@@ -584,7 +620,7 @@ int main(int argc, char *argv[])
                 subitem = plist_dict_get_item(node, "FairPlayCertChain");
                 if (!subitem) printf("Failed to get FairPlayCertChain\n");
 		plist_get_data_val(subitem, &xml_doc, &len);
-		write_xml_file("data/FairPlayCertChain.crt", xml_doc, (uint32_t)len);
+		write_xml_file("data/FairPlayCertChain.pem", xml_doc, (uint32_t)len);
 
 		subitem = plist_dict_get_item(node, "FairPlaySignature");
 		if (!subitem) printf("Failed to get FairPlaySignature\n");
@@ -629,6 +665,24 @@ int main(int argc, char *argv[])
 		char *signature = load_private_key_and_sign("certs/signature_private.key", atdata, atsize);
 		printf("Signature: %s\n", signature);
 
+		subitem = plist_dict_get_item(item, "UniqueDeviceID");
+		if (!subitem) printf("Failed to get UniqueDeviceID\n");
+		plist_get_string_val(subitem, &uuid);
+		printf("uuid=%s\n", uuid);
+
+
+		// copy the lockdown info plist file from usbmuxd into local data dir
+		sprintf(lockdown_path, "%s/%s.plist", LOCKDOWN_DIR, uuid);
+		sprintf(path, "data/%s.plist", uuid);
+		copy_file(lockdown_path, path);
+
+		lockdown_node = plist_from_file(path);
+		subitem = plist_dict_get_item(lockdown_node, "DeviceCertificate");
+		if (!subitem) printf("Failed to get DeviceCertificate\n");
+		plist_get_data_val(subitem, &xml_doc, &len);
+		write_xml_file("data/DeviceCertificate.pem", xml_doc, (uint32_t)len);
+
+		// rename the data directory to device serial number
 		subitem = plist_dict_get_item(item, "SerialNumber");
 		if (!subitem) printf("Failed to get SerialNumber\n");
 		plist_get_string_val(subitem, &serial);
@@ -636,11 +690,12 @@ int main(int argc, char *argv[])
 
 		// use data pulled from device to build activation response
 		if (activate) {
-			
+			// AccountTokenCertificate is just certs/iPhoneActivation.pem (serial number 2)
 		}
 
 		free(signature);
 		free(atdata);
+		plist_free(lockdown_node);
 		plist_free(node);
 	}
 	if (domain != NULL)
