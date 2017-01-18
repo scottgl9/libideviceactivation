@@ -461,6 +461,10 @@ int main(int argc, char *argv[])
 			}
 			plist_dict_remove_item(node2, "NANDInfo");
 			plist_dict_merge(&node, node2);
+			if(lockdownd_get_value(client, NULL, "ActivationInfo", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get ActivationInfo!\n");
+			}
+			plist_dict_merge(&node, node2);
 			plist_to_xml(node, &xml_doc, &xml_length);
 			write_xml_file(filename, xml_doc, (uint32_t)xml_length);
 			free(xml_doc);
