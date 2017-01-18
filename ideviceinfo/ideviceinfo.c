@@ -47,18 +47,19 @@
 #define PHONEHOME_URL "https://albert.apple.com/deviceservices/phoneHome"
 #define ACTIVITY_URL "https://albert.apple.com/deviceservices/activity"
 
+// removed anything to do with cellular
 const char *response_strings[] = {
-"InternationalMobileEquipmentIdentity",
+//"InternationalMobileEquipmentIdentity",
 "CertificateURL",
-"PhoneNumberNotificationURL",
+//"PhoneNumberNotificationURL",
 "SerialNumber",
-"InternationalMobileSubscriberIdentity",
-"MobileEquipmentIdentifier",
+//"InternationalMobileSubscriberIdentity",
+//"MobileEquipmentIdentifier",
 "ProductType",
 "UniqueDeviceID",
 "ActivationRandomness",
 "ActivityURL",
-"IntegratedCircuitCardIdentity",
+//"IntegratedCircuitCardIdentity",
 NULL
 };
 
@@ -343,8 +344,8 @@ char *load_private_key_and_sign(char *filename, char *data, size_t len) {
    char *signature = NULL;
    char *encodedsig = NULL;
    const EVP_MD* md = EVP_get_digestbyname("SHA256");
-
-   OpenSSL_add_all_algorithms();
+/*
+   //OpenSSL_add_all_algorithms();
    privkey = EVP_PKEY_new();
 
    fp = fopen (filename, "r");
@@ -380,7 +381,7 @@ char *load_private_key_and_sign(char *filename, char *data, size_t len) {
        free(signature);
        signature = NULL;
    }
-
+*/
    return encodedsig;
 }
 
@@ -691,6 +692,24 @@ int main(int argc, char *argv[])
 		// use data pulled from device to build activation response
 		if (activate) {
 			// AccountTokenCertificate is just certs/iPhoneActivation.pem (serial number 2)
+/*
+plist_t record looks like this:
+<plist version="1.0"><dict><key>iphone-activation</key><dict><key>unbrick</key><true/><key>activation-record</key><dict><key>AccountTokenCertificate</key><data>
+</data><key>DeviceCertificate</key><data>data><key>FairPlayKeyData</key><data>/data><key>AccountToken</key><data></data><key>AccountTokenSignature</key><data></data></dict></dict></dict></plist>
+					// activate device using lockdown
+					if (LOCKDOWN_E_SUCCESS != lockdownd_activate(lockdown, record)) {
+						fprintf(stderr, "Failed to activate device with record.\n");
+						result = EXIT_FAILURE;
+						goto cleanup;
+					}
+
+					// set ActivationStateAcknowledged if we succeeded
+					if (LOCKDOWN_E_SUCCESS != lockdownd_set_value(lockdown, NULL, "ActivationStateAcknowledged", plist_new_bool(1))) {
+						fprintf(stderr, "Failed to set ActivationStateAcknowledged on device.\n");
+						result = EXIT_FAILURE;
+						goto cleanup;
+					}
+*/
 		}
 
 		free(signature);
