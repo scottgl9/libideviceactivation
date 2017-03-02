@@ -31,6 +31,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <linux/limits.h>
 
 #ifdef WIN32
 #include <windows.h>
@@ -49,12 +50,73 @@ static char* udid = NULL;
 static idevice_t device = NULL;
 static syslog_relay_client_t syslog = NULL;
 
+#define RESET		0
+#define BRIGHT 		1
+#define DIM		2
+#define UNDERLINE 	3
+#define BLINK		4
+#define REVERSE		7
+#define HIDDEN		8
+
+#define BLACK 		0
+#define RED		1
+#define GREEN		2
+#define YELLOW		3
+#define BLUE		4
+#define MAGENTA		5
+#define CYAN		6
+#define	WHITE		7
+
+char buffer[PATH_MAX];
+static int bufpos = 0;
+
+void textcolor(int attr, int fg, int bg)
+{	char command[13];
+
+	/* Command is the control command to the terminal */
+	//sprintf(command, "%c[%d;%d;%dm", 0x1B, attr, fg + 30, bg + 40);
+	sprintf(command, "%c[%d;%dm", 0x1B, attr, fg + 30);
+	printf("%s", command);
+}
+
 static void syslog_callback(char c, void *user_data)
 {
-	//putchar(c);
-	printf("%c", c);
+	char *token=NULL;
+	char *str=NULL;
+	int cnt=0;
 	if (c == '\n') {
-		fflush(stdout);
+		buffer[bufpos] = '\0';
+		str = strdup(buffer);
+		cnt=0;
+		// have full line in buffer
+		while ((token = strsep(&str, " ")) != NULL) {
+			if (cnt >= 6) {
+				if (!strcmp(token, "<Notice>:") || !strcmp(token, "<Info>:"))
+					textcolor(BRIGHT, GREEN, BLACK);
+				else if (!strcmp(token, "<Warning>:"))
+					textcolor(BRIGHT, YELLOW, BLACK);
+				else if (!strcmp(token, "<Error>:"))
+					textcolor(BRIGHT, RED, BLACK);
+				printf("%s ", token);
+			}
+			else if (cnt >= 5) {
+				textcolor(BRIGHT, YELLOW, BLACK);
+				printf("%s ", token);
+			}
+			else if (cnt >= 4) {	
+				textcolor(BRIGHT, BLUE, BLACK);
+				printf("%s ", token);
+			} else {
+				printf("%s ", token);
+			}
+			cnt++;
+		}
+		textcolor(RESET, WHITE, BLACK);
+		printf("\n");
+		if (str) free(str);
+		bufpos = 0;
+	} else {
+		buffer[bufpos++] = c;
 	}
 }
 
