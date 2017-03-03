@@ -86,6 +86,32 @@ static void syslog_callback(char c, void *user_data)
 	int cnt=0;
 	if (c == '\n') {
 		buffer[bufpos] = '\0';
+		if (strstr(buffer, "AppleBiometricSensor")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "AudioToolbox")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "CFNetwork")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "CommCenter")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "CoreMotion")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "libdispatch.dylib")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "libsystem_network.dylib")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "locationd")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "mDNSResponder")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "mediaserverd")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "PersistentConnection")) {
+			bufpos=0; return;
+ 		}
+		else if (strstr(buffer, "VirtualAudio")) {
+			bufpos=0; return;
+		}
 		str = strdup(buffer);
 		cnt=0;
 		// have full line in buffer
