@@ -88,17 +88,50 @@ static void syslog_callback(char c, void *user_data)
 		buffer[bufpos] = '\0';
 		if (strstr(buffer, "AppleBiometricSensor")) {
 			bufpos=0; return;
+		} else if (strstr(buffer, "apsd + ")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "AudioToolbox")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "BaseBoard")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "BTServer")) {
+			bufpos=0; return;
 		} else if (strstr(buffer, "CFNetwork")) {
+			bufpos=0; return;
+                } else if (strstr(buffer, "com_apple_MobileAsset_CoreSuggestionsQPAssets")) {
+                        bufpos=0; return;
+		} else if (strstr(buffer, "com_apple_MobileAsset_VoiceServices_CustomVoice")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "com_apple_MobileAsset_VoiceServicesVocalizerVoice")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "CommCenter")) {
 			bufpos=0; return;
 		} else if (strstr(buffer, "CoreMotion")) {
 			bufpos=0; return;
+		} else if (strstr(buffer, "CoreFoundation")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "DuetActivitySchedulerDaemon")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "libdispatch.dylib")) {
+			bufpos=0; return;
 		} else if (strstr(buffer, "libsystem_network.dylib")) {
+			bufpos=0; return;
+		} else if (strstr(buffer, "locationd")) {
 			bufpos=0; return;
 		} else if (strstr(buffer, "mDNSResponder")) {
 			bufpos=0; return;
+		} else if (strstr(buffer, "mediaserverd")) {
+			bufpos=0; return;
+                } else if (strstr(buffer, "mobileassetd")) {
+                        bufpos=0; return;
 		} else if (strstr(buffer, "PersistentConnection")) {
 			bufpos=0; return;
- 		}
+                } else if (strstr(buffer, "TIMING: Calling plugin")) {
+                        bufpos=0; return;
+                }
+		else if (strstr(buffer, "VirtualAudio")) {
+			bufpos=0; return;
+		}
 		str = strdup(buffer);
 		cnt=0;
 		// have full line in buffer
