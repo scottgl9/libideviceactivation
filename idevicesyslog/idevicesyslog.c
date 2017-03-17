@@ -69,6 +69,7 @@ static syslog_relay_client_t syslog = NULL;
 
 char buffer[PATH_MAX];
 static int bufpos = 0;
+static int skip_lines = 0;
 
 void textcolor(int attr, int fg, int bg)
 {	char command[13];
@@ -85,6 +86,12 @@ static void syslog_callback(char c, void *user_data)
 	char *str=NULL;
 	int cnt=0;
 	if (c == '\n') {
+		if (skip_lines > 0) {
+			bufpos=0;
+			skip_lines--;
+			return;
+		}
+
 		buffer[bufpos] = '\0';
 		if (strstr(buffer, "AppleBiometricSensor")) {
 			bufpos=0; return;
@@ -98,12 +105,8 @@ static void syslog_callback(char c, void *user_data)
 			bufpos=0; return;
 		} else if (strstr(buffer, "CFNetwork")) {
 			bufpos=0; return;
-                } else if (strstr(buffer, "com_apple_MobileAsset_CoreSuggestionsQPAssets")) {
+                } else if (strstr(buffer, "com_apple_MobileAsset_")) {
                         bufpos=0; return;
-		} else if (strstr(buffer, "com_apple_MobileAsset_VoiceServices_CustomVoice")) {
-			bufpos=0; return;
-		} else if (strstr(buffer, "com_apple_MobileAsset_VoiceServicesVocalizerVoice")) {
-			bufpos=0; return;
 		} else if (strstr(buffer, "CommCenter")) {
 			bufpos=0; return;
 		} else if (strstr(buffer, "CoreMotion")) {
@@ -126,12 +129,19 @@ static void syslog_callback(char c, void *user_data)
                         bufpos=0; return;
 		} else if (strstr(buffer, "PersistentConnection")) {
 			bufpos=0; return;
+                } else if (strstr(buffer, "softwareupdateservicesd")) {
+                        bufpos=0; skip_lines=21; return;
                 } else if (strstr(buffer, "TIMING: Calling plugin")) {
                         bufpos=0; return;
                 }
 		else if (strstr(buffer, "VirtualAudio")) {
 			bufpos=0; return;
-		}
+                } else if (strstr(buffer, "wirelessproxd")) {
+                        bufpos=0; return;
+                } else if (strstr(buffer, "WirelessProximity")) {
+                        bufpos=0; return;
+                }
+
 		str = strdup(buffer);
 		cnt=0;
 		// have full line in buffer
