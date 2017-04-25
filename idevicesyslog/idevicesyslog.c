@@ -99,6 +99,8 @@ static void syslog_callback(char c, void *user_data)
 			bufpos=0; return;
 		} else if (strstr(buffer, "AudioToolbox")) {
 			bufpos=0; return;
+                } else if (strstr(buffer, "backboardd")) {
+                        bufpos=0; return;
 		} else if (strstr(buffer, "BaseBoard")) {
 			bufpos=0; return;
 		} else if (strstr(buffer, "BTServer")) {
@@ -115,6 +117,8 @@ static void syslog_callback(char c, void *user_data)
 			bufpos=0; return;
 		} else if (strstr(buffer, "DuetActivitySchedulerDaemon")) {
 			bufpos=0; return;
+                } else if (strstr(buffer, "kernel")) {
+                        bufpos=0; return;
 		} else if (strstr(buffer, "libdispatch.dylib")) {
 			bufpos=0; return;
 		} else if (strstr(buffer, "libsystem_network.dylib")) {
@@ -129,13 +133,22 @@ static void syslog_callback(char c, void *user_data)
                         bufpos=0; return;
 		} else if (strstr(buffer, "PersistentConnection")) {
 			bufpos=0; return;
+                } else if (strstr(buffer, "powerd")) {
+                        bufpos=0; return;
+                } else if (strstr(buffer, "SpringBoard")) {
+                        bufpos=0; return;
                 } else if (strstr(buffer, "softwareupdateservicesd")) {
                         bufpos=0; skip_lines=21; return;
+                } else if (strstr(buffer, "timed")) {
+                        bufpos=0; return;
                 } else if (strstr(buffer, "TIMING: Calling plugin")) {
                         bufpos=0; return;
-                }
-		else if (strstr(buffer, "VirtualAudio")) {
+                } else if (strstr(buffer, "VirtualAudio")) {
 			bufpos=0; return;
+                } else if (strstr(buffer, "voiced")) {
+                        bufpos=0; return;
+                } else if (strstr(buffer, "wifid")) {
+                        bufpos=0; return;
                 } else if (strstr(buffer, "wirelessproxd")) {
                         bufpos=0; return;
                 } else if (strstr(buffer, "WirelessProximity")) {
