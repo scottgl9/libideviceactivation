@@ -41,6 +41,8 @@
 #include <openssl/pem.h>
 #include <openssl/evp.h>
 
+#define LOCKDOWN_DIR "/var/lib/lockdown"
+
 size_t plist_strip_xml_dict(char** xmlplist)
 {
         uint32_t size = 0;
@@ -446,8 +448,10 @@ int main(int argc, char *argv[])
 	if(lockdownd_get_value(client, NULL, key, &node) == LOCKDOWN_E_SUCCESS) {
 		
 		if (node) {
-			char *serial=NULL;
-			plist_t subitem;
+			char lockdown_path[PATH_MAX-1], path[PATH_MAX-1];
+			char *tmp_value=NULL;
+			char *serial=NULL, *uuid=NULL;
+			plist_t subitem, lockdown_node;
 		
 			subitem = plist_dict_get_item(node, "SerialNumber");
 			if (!subitem) printf("Failed to get SerialNumber\n");
@@ -461,10 +465,34 @@ int main(int argc, char *argv[])
 			}
 			plist_dict_remove_item(node2, "NANDInfo");
 			plist_dict_merge(&node, node2);
+
 			if(lockdownd_get_value(client, NULL, "ActivationInfo", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
 				fprintf(stderr, "ERROR: failed to get ActivationInfo!\n");
 			}
 			plist_dict_merge(&node, node2);
+
+			if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get FairPlayCertificate!\n");
+			}
+			subitem = plist_dict_get_item(node2, "FairPlayCertificate");
+			if (!subitem) printf("Failed to get FairPlayCertificate\n");
+			plist_dict_insert_item(node, "FairPlayCertificate", subitem);
+/*
+			subitem = plist_dict_get_item(node2, "FairPlayID");
+			if (!subitem) printf("Failed to get FairPlayID\n");
+			plist_dict_insert_item(node, "FairPlayID", subitem);
+*/
+			subitem = plist_dict_get_item(node, "UniqueDeviceID");
+			if (!subitem) printf("Failed to get UniqueDeviceID\n");
+			plist_get_string_val(subitem, &uuid);
+
+		        sprintf(lockdown_path, "%s/%s.plist", LOCKDOWN_DIR, uuid);
+
+		        lockdown_node = plist_from_file(lockdown_path);
+		        subitem = plist_dict_get_item(lockdown_node, "DeviceCertificate");
+		        if (!subitem) printf("Failed to get DeviceCertificate\n");
+			plist_dict_insert_item(node, "DeviceCertificate", subitem);
+
 			plist_to_xml(node, &xml_doc, &xml_length);
 			write_xml_file(filename, xml_doc, (uint32_t)xml_length);
 			free(xml_doc);
@@ -475,25 +503,6 @@ int main(int argc, char *argv[])
 	plist_free(node);
 	node = NULL;
 
-/*
-	if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node) == LOCKDOWN_E_SUCCESS && node) {
-		// important fields: FairPlayCertificate, FairPlayGUID, FairPlayID, MinITunesVersion
-		char *tmp_value=NULL;
-		mkdir("data", 0775);
-		// NOTE: FairPlayCertificate retrieved here is what is sent to the device (base64 encoded) as FairPlayKeyData
-		plist_t item = plist_dict_get_item(node, "FairPlayCertificate");
-		if (!item) printf("Failed to get FairPlayCertificate\n");
-		plist_to_xml(item, &xml_doc, &xml_length);
-		xml_length = plist_strip_xml(&xml_doc);
-		write_xml_file("data/FairPlayKeyData.pem", xml_doc, xml_length);
-		//plist_free(item);
-		item = plist_dict_get_item(node, "FairPlayGUID");
-		//plist_get_string_val(item, &tmp_value);
-		//printf("FairPlayGUID = %s\n", tmp_value);
-		plist_free(node);
-		node = NULL;
-	}
-*/
 /*
 	if ((lockdownd_get_value(client, NULL, "ActivationInfo", &node) != LOCKDOWN_E_SUCCESS) || !node || (plist_get_node_type(node) != PLIST_DICT)) {
 		fprintf(stderr, "%s: Unable to get ActivationInfo from lockdownd\n", __func__);
