@@ -462,14 +462,70 @@ int main(int argc, char *argv[])
 
 			if(lockdownd_get_value(client, "com.apple.disk_usage", key, &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
 				fprintf(stderr, "ERROR: failed to get com.apple.disk_usage!\n");
+			} else {
+				plist_dict_remove_item(node2, "NANDInfo");
+				plist_dict_merge(&node, node2);
 			}
-			plist_dict_remove_item(node2, "NANDInfo");
-			plist_dict_merge(&node, node2);
 
 			if(lockdownd_get_value(client, NULL, "ActivationInfo", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
 				fprintf(stderr, "ERROR: failed to get ActivationInfo!\n");
+			} else {
+				plist_dict_merge(&node, node2);
 			}
-			plist_dict_merge(&node, node2);
+
+			if(lockdownd_get_value(client, NULL, "DevicePublicKey", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get DevicePublicKey!\n");
+			} else {
+				plist_dict_insert_item(node, "DevicePublicKey", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "DeviceEnclosureColor", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get DeviceEnclosureColor!\n");
+			} else {
+				plist_dict_insert_item(node, "DeviceEnclosureColor", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "DeviceVariant", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get DeviceVariant!\n");
+			} else {
+				plist_dict_insert_item(node, "DeviceVariant", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "BasebandGoldCertId", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get BasebandGoldCertId!\n");
+			} else {
+				plist_dict_insert_item(node, "BasebandGoldCertId", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "DeviceCertificate", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get DeviceCertificate!\n");
+			} else {
+				plist_dict_insert_item(node, "DeviceCertificate", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "BasebandFirmwareManifestData", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get BasebandFirmwareManifestData!\n");
+			} else {
+				plist_dict_insert_item(node, "BasebandFirmwareManifestData", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "ActivationPublicKey", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get ActivationPublicKey!\n");
+			} else {
+				plist_dict_insert_item(node, "ActivationPublicKey", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "ActivationPrivateKey", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get ActivationPrivateKey!\n");
+			} else {
+				plist_dict_insert_item(node, "ActivationPrivateKey", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "EscrowBag", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get EscrowBag!\n");
+			} else {
+				plist_dict_insert_item(node, "EscrowBag", node2);
+			}
 
 			if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
 				fprintf(stderr, "ERROR: failed to get FairPlayCertificate!\n");
