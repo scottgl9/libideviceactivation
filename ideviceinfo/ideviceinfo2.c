@@ -473,6 +473,12 @@ int main(int argc, char *argv[])
 				plist_dict_merge(&node, node2);
 			}
 
+			if(lockdownd_get_value(client, NULL, "MarketingName", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get MarketingName!\n");
+			} else {
+				plist_dict_insert_item(node, "MarketingName", node2);
+			}
+
 			if(lockdownd_get_value(client, NULL, "DevicePublicKey", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
 				fprintf(stderr, "ERROR: failed to get DevicePublicKey!\n");
 			} else {
@@ -525,6 +531,18 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "ERROR: failed to get EscrowBag!\n");
 			} else {
 				plist_dict_insert_item(node, "EscrowBag", node2);
+			}
+
+			if(lockdownd_get_value(client, NULL, "RegulatoryModelNumber", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get RegulatoryModelNumber!\n");
+			} else {
+				plist_dict_insert_item(node, "RegulatoryModelNumber", node2);
+			}
+
+			if(lockdownd_get_value(client, "com.apple.mobile.internal", "SysCfgData", &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
+				fprintf(stderr, "ERROR: failed to get SysCfgData!\n");
+			} else {
+				plist_dict_insert_item(node, "SysCfgData", node2);
 			}
 
 			if(lockdownd_get_value(client, "com.apple.mobile.iTunes", key, &node2) != LOCKDOWN_E_SUCCESS || node2 == NULL) {
